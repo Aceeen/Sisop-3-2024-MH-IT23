@@ -15,13 +15,14 @@
 2. Praktikan diharapkan membuat laporan penjelasan dan penyelesaian soal dalam bentuk Readme(github).
 3. Format nama repository github “Sisop-[Nomor Modul]-2023-[Kode Dosen Kelas]-[Nama Kelompok]” (contoh:Sisop-1-2024-MH-IT01).
 4. Struktur repository seperti berikut:
+   
 			—soal_1:
 				— auth.c
 				— rate.c
 				— db.c
                                     
-—soal_2:
-	— dudududu.c
+                        —soal_2:
+	                        — dudududu.c
 				
 			—soal_3:
 				— actions.c

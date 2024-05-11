@@ -657,9 +657,8 @@ Lalu parent process akan membaca pipe
     }
 }
 ```
-Untuk parent process bakalan baca hasil dari pipe, cetak hasil operasi dalam bentuk string, sama menunggu child process selesai baru parent process berhenti berjalan.
 Jadi child process akan mengambil argumen dari user untuk operasi aritmatika lalu hasilnya dikirim ke pipe. Child process juga akan menulis log ke file histori.log dengan memanggil fungsi writeLog. Lalu parent process akan membaca hasil dari pipe, cetak hasil operasi dalam bentuk string, dan menunggu child process selesai berjalan baru kemudian parent process akan selesai berjalan.
 <br />
-Jika kode dijalankan :
+Jika kode dijalankan : <br /> <br />
 ![Screenshot 2024-05-11 151021](https://github.com/Aceeen/Sisop-3-2024-MH-IT23/assets/150018995/fd924c47-5e2d-433e-b3f8-e2369f41b222)
 

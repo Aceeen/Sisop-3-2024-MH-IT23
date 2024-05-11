@@ -196,6 +196,9 @@ int main() {
 }
 ```
 
+- Berikut dokumentasi ketika AUTH.C di jalankan :
+![Screenshot 2024-05-11 131752](https://github.com/Aceeen/Sisop-3-2024-MH-IT23/assets/151058945/fc550fbb-b4ac-4f54-a3b2-6680e5714958) 
+
 #### RATE.C 
 Hasil dari kode ini adalah mencetak rating tertinggi dari isi file yang ada di shared memory, baik untuk file-file "parkinglot.csv" maupun "trashcan.csv". Setiap entri akan mencetak jenis file, nama file, nama dengan rating tertinggi, dan rating tertinggi.
 
@@ -324,6 +327,9 @@ int main() {
     return 0;
 }
 ```
+
+- Berikut dokumentasi ketika RATE.C di jalankan :
+![Screenshot 2024-05-11 132004](https://github.com/Aceeen/Sisop-3-2024-MH-IT23/assets/151058945/8203087d-cf56-455d-92f7-8cd555e26105)
 
 #### DB.C
 Hasil dari kode ini adalah memindahkan file-file yang ada di shared memory ke dalam folder "database", serta mencatat setiap pemindahan tersebut ke dalam file db.log. File asli akan dihapus setelah disalin ke dalam folder "database".
@@ -481,7 +487,13 @@ int main() {
 }
 ```
 
+- Berikut dokumentasi ketika DB.C di jalankan :
+![Screenshot 2024-05-11 132155](https://github.com/Aceeen/Sisop-3-2024-MH-IT23/assets/151058945/ec733ece-8df1-43bc-a494-a3f596336be1)
 
+- Berikut dokumentasi direktori sebelum dan sesudah AUTH.C dan DB.C di jalankan
+![Screenshot 2024-05-11 131604](https://github.com/Aceeen/Sisop-3-2024-MH-IT23/assets/151058945/bc339bd3-7c65-4656-b086-acf3c3a381cc)
+
+![Screenshot 2024-05-11 132312](https://github.com/Aceeen/Sisop-3-2024-MH-IT23/assets/151058945/d42dc8ff-09c9-48ea-ad92-262740c4eee2)
 
 ### SOAL 2
 Membuat kalkulator sederhana dengan menerapkan konsep pipes dan fork <br />

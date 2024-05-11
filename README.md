@@ -49,6 +49,438 @@ Jika melanggar struktur repo akan dianggap sama dengan curang dan menerima konse
 
 ### SOAL 1
 
+Pada soal di minta untuk membuat :
+1. Auth.c:
+- Memeriksa apakah file yang masuk ke folder new-data adalah file CSV.
+- Memeriksa apakah nama file berakhiran "trashcan" atau "parkinglot".
+- Jika file lolos autentikasi, file tersebut akan dipindahkan ke shared memory.
+
+2. Db.c:
+- Memindahkan file yang lolos autentikasi dari new-data ke folder microservices/database menggunakan shared memory.
+- Mencatat semua file yang masuk ke dalam folder microservices/database ke dalam file db.log.
+
+3. Rate.c:
+- Mengambil data CSV dari shared memory.
+- Menampilkan output Tempat Sampah dan Parkiran dengan rating terbaik dari data tersebut.
+
+4. Logging:
+- Melakukan logging setiap kali sebuah file masuk ke dalam folder microservices/database. Log ini harus mencatat waktu masuknya file beserta jenisnya (Trash Can atau Parking Lot) dan nama filenya.
+
+#### SOAL
+
+#### AUTH.C 
+Hasil dari kode ini adalah memindahkan file yang sesuai dengan kriteria (berakhiran "parkinglot.csv" atau "trashcan.csv") dari direktori "new-data" ke dalam shared memory. File-file yang tidak sesuai akan dihapus dari direktori "new-data". Saat file berhasil dipindahkan, program akan menampilkan pesan yang menyatakan bahwa file tersebut berhasil disimpan di shared memory.
+
+1. cek_file(const char *filename):
+- Fungsi ini bertujuan untuk memeriksa apakah nama file sesuai dengan ketentuan yang diminta dalam soal.
+- Parameter filename adalah nama file yang akan diperiksa.
+- Fungsi ini mengembalikan nilai 1 jika nama file berakhir dengan "parkinglot.csv" atau "trashcan.csv", dan mengembalikan nilai 0 jika tidak sesuai.
+
+```sh
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <dirent.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#define MAX_FILENAME_LENGTH 512
+#define MAX_FILE_CONTENT_LENGTH 1024
+#define MAX_FILES 10
+#define SHARED_MEMORY_KEY 4321
+#define SHARED_MEMORY_SIZE (sizeof(FileInfo) * MAX_FILES)
+
+typedef struct {
+    char filename[MAX_FILENAME_LENGTH];
+    char content[MAX_FILE_CONTENT_LENGTH];
+} FileInfo;
+
+// Fungsi untuk mengecek apakah nama file sesuai dengan ketentuan atau tidak 
+int cek_file(const char *filename) {
+    // Cek apakah nama file berakhiran dengan "parkinglot.csv" atau "trashcan.csv"
+    if (strstr(filename, "parkinglot.csv") || strstr(filename, "trashcan.csv")) {
+        return 1; 
+    } else {
+        return 0; // File selain csv tidak valid
+    }
+}
+```
+
+2. file_lolos():
+- Fungsi ini bertanggung jawab untuk memindahkan file yang lolos autentikasi ke dalam shared memory.
+- Fungsi ini membuka direktori "new-data" untuk membaca file-file yang ada di dalamnya.
+- Selanjutnya, fungsi membuat shared memory dengan ukuran yang cukup untuk menyimpan data dari beberapa file.
+- Fungsi kemudian menghubungkan shared memory yang telah dibuat ke ruang alamat proses menggunakan shmat.
+- Setelah itu, fungsi membaca setiap file di dalam direktori "new-data", memeriksa apakah sesuai dengan kriteria menggunakan fungsi cek_file, dan memindahkan file yang lolos autentikasi ke shared memory.
+- Jika file tidak sesuai, fungsi akan menghapusnya.
+- Setelah semua file yang lolos autentikasi dipindahkan, shared memory akan dilepas menggunakan shmdt.
+
+```sh
+// Fungsi untuk memindahkan file yang lolos autentikasi menuju shared memory 
+void file_lolos() {
+    DIR *dir;
+    struct dirent *entry;
+
+    // Membuka direktori folder yang diinginkan, new-data
+    dir = opendir("new-data");
+    if (dir == NULL) {
+        perror("Error opening directory");
+        exit(EXIT_FAILURE);
+    }
+    
+    // Membuat shared memory
+    int shmid = shmget(SHARED_MEMORY_KEY, SHARED_MEMORY_SIZE, IPC_CREAT | 0666);
+    if (shmid < 0) {
+        perror("Error creating shared memory");
+        exit(EXIT_FAILURE);
+    }
+    
+    // Menghubungkan shared memory ke ruang alamat proses
+    FileInfo *shmaddr = (FileInfo *) shmat(shmid, NULL, 0);
+    if (shmaddr == (FileInfo *) -1) {
+        perror("Error attaching shared memory");
+        exit(EXIT_FAILURE);
+    }
+
+    int file_count = 0;
+    
+    // Looping untuk memindah file menuju shared memory 
+    while ((entry = readdir(dir)) != NULL && file_count < MAX_FILES) {
+        if (entry->d_type == DT_REG) { // Memeriksa jika entri adalah file regular
+            char filename[MAX_FILENAME_LENGTH];
+            snprintf(filename, MAX_FILENAME_LENGTH, "new-data/%s", entry->d_name);
+
+            // Menyalin nama file dan isi file jika sesuai kriteria
+            if (cek_file(entry->d_name)) {
+                strcpy(shmaddr[file_count].filename, entry->d_name);
+
+                FILE *fp = fopen(filename, "r");
+                if (fp == NULL) {
+                    perror("Error opening file");
+                    exit(EXIT_FAILURE);
+                }
+
+                fread(shmaddr[file_count].content, 1, MAX_FILE_CONTENT_LENGTH, fp);
+                fclose(fp);
+
+                printf("File berhasil disimpan di shared memory:\t[%s]\n", shmaddr[file_count].filename);
+                file_count++;
+            } else {
+                // File yang tidak sesuai akan dihapus
+                printf("File tidak valid, dihapus:\t[%s]\n", entry->d_name);
+                remove(filename);
+            }
+        }
+    }
+
+    // Melepaskan shared memory
+    shmdt((void *) shmaddr);
+
+    closedir(dir);
+}
+```
+
+3. main():
+- Fungsi main() hanya memanggil fungsi file_lolos() untuk menjalankan proses pemindahan file ke shared memory.
+- Setelah itu, program akan berakhir dengan mengembalikan nilai 0.
+
+```sh
+int main() {
+    file_lolos();
+    return 0;
+}
+```
+
+#### RATE.C 
+Hasil dari kode ini adalah mencetak rating tertinggi dari isi file yang ada di shared memory, baik untuk file-file "parkinglot.csv" maupun "trashcan.csv". Setiap entri akan mencetak jenis file, nama file, nama dengan rating tertinggi, dan rating tertinggi.
+
+1. nama_rating(const char *content, char *name, float *rating):
+- Fungsi ini bertujuan untuk memisahkan nama dan rating dari konten file yang diberikan.
+- Parameter content adalah konten file yang akan diproses.
+- Parameter name adalah pointer ke array char di mana nama akan disimpan.
+- Parameter rating adalah pointer ke float di mana rating akan disimpan.
+- Fungsi ini menggunakan sscanf() untuk memisahkan nama dan rating dari konten file yang dipisahkan oleh tanda koma (,).
+
+```sh
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+
+#define MAX_FILENAME_LENGTH 512
+#define MAX_FILE_CONTENT_LENGTH 1024
+#define MAX_FILES 10
+#define SHARED_MEMORY_KEY 4321
+#define SHARED_MEMORY_SIZE (sizeof(FileInfo) * MAX_FILES)
+
+typedef struct {
+    char filename[MAX_FILENAME_LENGTH];
+    char content[MAX_FILE_CONTENT_LENGTH];
+} FileInfo;
+
+// Fungsi untuk memisahkan nama dan rating dari konten file
+void nama_rating(const char *content, char *name, float *rating) {
+    sscanf(content, "%[^,], %f", name, rating);
+}
+```
+
+2. rating_max(const void *a, const void *b):
+- Fungsi ini adalah fungsi pembanding untuk digunakan dalam pengurutan rating.
+- Parameter a dan b adalah pointer ke dua rating yang akan dibandingkan.
+
+```sh
+// Fungsi untuk membandingkan dua entri berdasarkan rating untuk pengurutan
+int rating_max(const void *a, const void *b) {
+    float rating_a = *(float *)a;
+    float rating_b = *(float *)b;
+    return (rating_a < rating_b) - (rating_a > rating_b);
+}
+```
+
+3. print_ratingmx(const char *filename, const char *content):
+- Fungsi ini bertujuan untuk mencetak nama dan rating tertinggi dari konten file yang diberikan.
+- Parameter filename adalah nama file yang akan dicetak.
+- Parameter content adalah konten file yang akan diproses.
+- Fungsi ini memisahkan konten file menjadi baris-baris, kemudian mencari rating tertinggi dari baris-baris tersebut.
+- Setelah menemukan rating tertinggi, fungsi mencetak jenis file (Parking Lot atau Trash Can), nama file, nama dengan rating tertinggi, dan rating tertinggi.
+
+```sh
+// Fungsi untuk mencetak rating tertinggi setelah diurutkan
+void print_ratingmx(const char *filename, const char *content) {
+
+    // Memisahkan dan menyimpan rating dari konten file
+    char temp_content[MAX_FILE_CONTENT_LENGTH];
+    strcpy(temp_content, content);
+
+    float highest_rating = 0.0;
+    char highest_rated_name[MAX_FILENAME_LENGTH] = "";
+
+    char *token = strtok(temp_content, "\n");
+    token = strtok(NULL, "\n");
+   
+    // Looping untuk mencari rating tertinggi
+    while (token != NULL) {
+        char name[MAX_FILENAME_LENGTH];
+        float rating;
+        nama_rating(token, name, &rating);
+
+        if (rating > highest_rating) {
+            highest_rating = rating;
+            strcpy(highest_rated_name, name);
+        }
+
+        token = strtok(NULL, "\n");
+    }
+
+    printf("Type: %s\n", strstr(filename, "parkinglot") ? "Parking Lot" : "Trash Can");
+    printf("Filename: %s\n", filename);
+    printf("----------------------\n");
+    printf("Name: %s\n", highest_rated_name);
+    printf("Rating: %.1f\n", highest_rating);
+    printf("--------------------------------\n\n");
+}
+```
+
+4. main():
+- Fungsi main() adalah titik masuk utama program.
+- Fungsi ini membuka shared memory yang sudah ada. Kemudian, fungsi ini menghubungkan shared memory tersebut ke ruang alamat proses.
+- Selanjutnya, fungsi membaca dan mencetak rating tertinggi dari isi file di shared memory menggunakan fungsi print_ratingmx().
+- Setelah selesai, shared memory akan dilepas menggunakan shmdt().
+- Program akan berakhir setelah itu.
+
+```sh
+int main() {
+    // Mendapatkan akses ke shared memory yang sama
+    int shmid = shmget(SHARED_MEMORY_KEY, SHARED_MEMORY_SIZE, 0666);
+    if (shmid < 0) {
+        perror("Error accessing shared memory");
+        exit(EXIT_FAILURE);
+    }
+
+    // Menghubungkan shared memory ke ruang alamat proses
+    FileInfo *shmaddr = (FileInfo *) shmat(shmid, NULL, 0);
+    if (shmaddr == (FileInfo *) -1) {
+        perror("Error attaching shared memory");
+        exit(EXIT_FAILURE);
+    }
+
+    // Membaca dan mencetak rating tertinggi dari isi file di shared memory
+    for (int i = 0; i < MAX_FILES; ++i) {
+        if (strlen(shmaddr[i].filename) > 0) {
+            print_ratingmx(shmaddr[i].filename, shmaddr[i].content);
+        }
+    }
+
+    // Melepaskan shared memory
+    shmdt((void *) shmaddr);
+
+    return 0;
+}
+```
+
+#### DB.C
+Hasil dari kode ini adalah memindahkan file-file yang ada di shared memory ke dalam folder "database", serta mencatat setiap pemindahan tersebut ke dalam file db.log. File asli akan dihapus setelah disalin ke dalam folder "database".
+
+
+1. tipe_file(const char *filename, char *type):
+- Fungsi ini bertujuan untuk menentukan tipe file berdasarkan judul file.
+- Parameter filename adalah nama file yang akan dianalisis.
+- Parameter type adalah pointer ke array char di mana tipe file akan disimpan.
+- Fungsi ini menggunakan fungsi strstr() untuk mencari substring "trashcan" atau "TrashCan" dalam filename. Jika ditemukan, maka type akan diset menjadi "Trash Can". Jika tidak, fungsi akan mencari substring "parkinglot" atau "ParkingLot". Jika ditemukan, maka type akan diset menjadi "Parking Lot".
+
+```sh
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <time.h>
+
+#define MAX_FILENAME_LENGTH 512
+#define MAX_FILE_CONTENT_LENGTH 1024
+#define MAX_FILES 10
+#define SHARED_MEMORY_KEY 4321
+#define SHARED_MEMORY_SIZE (sizeof(FileInfo) * MAX_FILES)
+
+typedef struct {
+    char filename[MAX_FILENAME_LENGTH];
+    char content[MAX_FILE_CONTENT_LENGTH];
+} FileInfo;
+
+// Fungsi untuk menentukan tipe file dari judul file
+void tipe_file(const char *filename, char *type) {
+    if (strstr(filename, "trashcan") || strstr(filename, "TrashCan")) {
+        strcpy(type, "Trash Can");
+    } else if (strstr(filename, "parkinglot") || strstr(filename, "ParkingLot")) {
+        strcpy(type, "Parking Lot");
+    } 
+}
+```
+
+2. catat_log(const char *filename, const char *type):
+- Fungsi ini bertujuan untuk mencatat ke dalam file db.log.
+- Parameter filename adalah nama file yang akan dicatat.
+- Parameter type adalah tipe file yang akan dicatat.
+- Fungsi ini mendapatkan waktu lokal saat ini menggunakan time() dan localtime() untuk membuat timestamp.
+- Kemudian, fungsi membuka file db.log (jika belum ada, maka akan dibuat), mencatat timestamp, jenis file, dan nama file, dan menutup file tersebut.
+
+```sh
+// Fungsi untuk mencatat ke dalam file db.log
+void catat_log(const char *filename, const char *type) {
+    time_t current_time;
+    struct tm *local_time;
+    char time_string[80];
+
+    current_time = time(NULL);
+    local_time = localtime(&current_time);
+
+    strftime(time_string, sizeof(time_string), "[%d/%m/%Y %H:%M:%S]", local_time);
+
+    // Mencari dan membuka file db.log
+    FILE *log_file = fopen("database/db.log", "a");
+    if (log_file == NULL) {
+        log_file = fopen("database/db.log", "w");
+        if (log_file == NULL) {
+            perror("Error creating log file");
+            exit(EXIT_FAILURE);
+        }
+        fprintf(log_file, "Log File Created\n");
+    }
+
+    fprintf(log_file, "%s\t[%s]\t[%s]\n", time_string, type, filename);
+    fclose(log_file);
+}
+```
+
+3. main():
+- Fungsi ini membuka shared memory yang sudah ada. Kemudian, fungsi menghubungkan shared memory tersebut ke ruang alamat proses.
+- Selanjutnya, fungsi mendapatkan jalur direktori saat ini menggunakan getcwd() dan menambahkan "/database" ke jalur tersebut.
+- Fungsi ini membuat folder "database" jika belum ada.
+- Kemudian, fungsi menyalin file dari shared memory ke folder "database". Setiap file yang berhasil disalin akan dicatat ke dalam file db.log. File asli akan dihapus dari folder "new-data" setelah disalin.
+- Setelah semua file diproses, shared memory akan dilepas menggunakan shmdt(). Program akan berakhir setelah itu.
+
+```sh
+int main() {
+    // Mendapatkan akses ke shared memory yang sama
+    int shmid = shmget(SHARED_MEMORY_KEY, SHARED_MEMORY_SIZE, 0666);
+    if (shmid < 0) {
+        perror("Error accessed shared memory");
+        exit(EXIT_FAILURE);
+    }
+
+    // Menghubungkan shared memory ke ruang alamat proses
+    FileInfo *shmaddr = (FileInfo *) shmat(shmid, NULL, 0);
+    if (shmaddr == (FileInfo *) -1) {
+        perror("Error attaching shared memory");
+        exit(EXIT_FAILURE);
+    }
+
+    // Mendapatkan jalur direktori saat ini
+    char cwd[1024];
+    if (getcwd(cwd, sizeof(cwd)) == NULL) {
+        perror("Error getting current directory");
+        exit(EXIT_FAILURE);
+    }
+
+    // Menambahkan "/database" ke jalur direktori saat ini
+    strcat(cwd, "/database");
+
+    // Membuat folder database jika belum ada
+    struct stat st = {0};
+    if (stat(cwd, &st) == -1) {
+        mkdir(cwd, 0700);
+    }
+
+    // Menyalin file dari shared memory ke folder database
+    for (int i = 0; i < MAX_FILES; ++i) {
+        if (strlen(shmaddr[i].filename) > 0) {
+            char dest_path[MAX_FILENAME_LENGTH + 1024];
+            snprintf(dest_path, sizeof(dest_path), "%s/%s", cwd, shmaddr[i].filename);
+
+            FILE *fp = fopen(dest_path, "w");
+            if (fp == NULL) {
+                perror("Error creating file");
+                continue;
+            }
+
+            fwrite(shmaddr[i].content, 1, strlen(shmaddr[i].content), fp);
+            fclose(fp);
+
+            printf("Berhasil memindah file ke database : %s\n", shmaddr[i].filename);
+
+            // Menentukan jenis berdasarkan nama file
+            char type[MAX_FILENAME_LENGTH];
+            tipe_file(shmaddr[i].filename, type);
+
+            // Mencatat log
+            catat_log(shmaddr[i].filename, type);
+
+            // Menghapus file asli dari folder new-data setelah menyalinnya
+            char source_path[MAX_FILENAME_LENGTH + 1000];
+            snprintf(source_path, sizeof(source_path), "../new-data/%s", shmaddr[i].filename);
+            if (remove(source_path) != 0) {
+                perror("Error deleting original file");
+            }
+        }
+    }
+
+    // Melepaskan shared memory
+    shmdt((void *) shmaddr);
+
+    return 0;
+}
+```
+
+
 
 ### SOAL 2
 Membuat kalkulator sederhana dengan menerapkan konsep pipes dan fork <br />
